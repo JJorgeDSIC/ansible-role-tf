@@ -26,4 +26,4 @@
 - name: Execute Script
   command: python3 distributed_example.py > results.txt
   args:
-    chdir: /home/{{user_name}}/
+    chdir: /home/ubuntu/
