@@ -19,8 +19,8 @@ import tensorflow as tf
 import sys
 import time
 
-parameter_servers =  {{ lookup('sequence', 'start=1 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
-workers = {{ lookup('sequence', 'start=1 count={{ worker_nodes }} format=worker-%d:2222', wantlist=True) }}
+parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
+workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes }} format=worker-%d:2222', wantlist=True) }}
 
 cluster = tf.train.ClusterSpec({"ps":parameter_servers, "worker":workers})
 
@@ -47,7 +47,7 @@ mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 
 if FLAGS.job_name == "ps":
 	print("Starting parameter server, task={:}...".format(FLAGS.task_index))
-    server.join()
+	server.join()
 elif FLAGS.job_name == "worker":
 	print("Starting worker, task={:}...".format(FLAGS.task_index))
 	# Between-graph replication
