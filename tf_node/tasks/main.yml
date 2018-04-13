@@ -1,0 +1,30 @@
+- name: Install Python3-dev tools
+  apt: pkg=python3-dev state=latest update_cache=yes
+- name: Install pip
+  apt: pkg=python3-pip state=latest update_cache=yes
+- name: Install Git
+  apt: pkg=git state=latest update_cache=yes
+- name: export language things and reconfigure locales
+  shell: export LC_ALL="en_US.UTF-8";export LC_CTYPE="en_US.UTF-8";sudo dpkg-reconfigure locales
+- name: Upgrade pip
+  pip: 
+   name: pip 
+   state: latest
+   executable: pip3
+- name: Install Jupyter
+  pip: 
+   name: jupyter 
+   state: latest
+   executable: pip3
+- name: Install tensorflow 1.4
+  pip: 
+   name: tensorflow 
+   version: 1.4
+   executable: pip3
+- name: checkout repo
+  git: 
+   repo=https://github.com/ischlag/distributed-tensorflow-example.git
+   version=master 
+   dest=./tensorflow-code
+  become: yes
+  become_user: ubuntu
