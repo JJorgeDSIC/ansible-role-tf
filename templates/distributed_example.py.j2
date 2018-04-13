@@ -24,7 +24,6 @@ workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker
 
 {% for host in groups['all'] %}
 {{ hostvars[host]['ansible_hostname'] }}
-{% endif %}
 {% endfor %}
 
 cluster = tf.train.ClusterSpec({"ps":parameter_servers, "worker":workers})
