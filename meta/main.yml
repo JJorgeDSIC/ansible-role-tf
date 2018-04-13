@@ -1,6 +1,6 @@
 ---
 galaxy_info:
-  author: "Javier Jorge"
+  author: "Javier Jorge Cano"
   description: Ansible role to install a TensorFlow experimental cluster (version 0.1)
   license: MIT
   min_ansible_version: 1.4

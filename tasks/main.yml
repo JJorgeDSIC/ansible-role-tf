@@ -27,7 +27,7 @@
   command: python3 distributed_example.py > results.txt
   args:
     chdir: /home/ubuntu/
-- name: Display results in Tensorboard (visible at: http://ip:2222)
+- name: Display results in Tensorboard (visible at ip\:2222)
   command: tensorboard --logdir=/tmp/mnist/1 --port 2222
   args:
     chdir: /home/ubuntu/
