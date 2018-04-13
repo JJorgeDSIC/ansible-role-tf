@@ -22,7 +22,7 @@ import time
 parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
 workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes - 1 }} format=worker-%d:2222', wantlist=True) }}
 
-job_name = {{ ami }}
+job_name = {{ hostvars[host]['ansible_hostname'] }}
 
 {% if hostvars[host]['ansible_hostname'].startswith("worker") %}
 task_index = {{ hostvars[host]['ansible_hostname'][-1] | int}} - {{ ps_nodes }}
