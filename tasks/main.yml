@@ -23,10 +23,7 @@
    executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
-- name: checkout repo
-  git: 
-   repo=https://github.com/ischlag/distributed-tensorflow-example.git
-   version=master 
-   dest=./tensorflow-code
-  become: yes
-  become_user: ubuntu
+- name: Execute Script
+  command: python3 distributed_example.py > results.txt
+  args:
+    chdir: /home/{{user_name}}/
