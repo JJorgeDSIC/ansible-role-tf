@@ -16,10 +16,9 @@
    name: jupyter 
    state: latest
    executable: pip3
-- name: Install tensorflow 1.4
+- name: Install tensorflow
   pip: 
    name: tensorflow 
-   version: 1.4
    executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
