@@ -16,11 +16,12 @@
    name: jupyter 
    state: latest
    executable: pip3
-- name: Install tensorflow
+- name: Install tensorflow 1.4
   pip: 
    name: tensorflow 
-   executable: pip3 
+   version: 1.4
    extra_args: --user
+   executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
 - name: Execute Script
