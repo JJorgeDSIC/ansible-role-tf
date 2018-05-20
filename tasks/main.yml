@@ -20,6 +20,7 @@
   pip: 
    name: tensorflow 
    executable: pip3 
+   extra_args: --user
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
 - name: Execute Script
