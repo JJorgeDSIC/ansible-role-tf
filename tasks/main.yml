@@ -22,6 +22,11 @@
    version: 1.4
    extra_args: --user
    executable: pip3 
+- name: Install tensorboard
+  pip: 
+   name: tensorboard 
+   extra_args: --user
+   executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
 - name: Execute Script
