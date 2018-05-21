@@ -1,29 +1,10 @@
 import tensorflow as tf
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import numpy as np
 import os
 import time
 import sys
 
 from tensorflow.examples.tutorials.mnist import input_data
-
-def plot(samples, w, h, fw, fh, iw=28, ih=28):
-    fig = plt.figure(figsize=(fw, fh))
-    gs = gridspec.GridSpec(w, h)
-    gs.update(wspace=0.05, hspace=0.05)
-
-    for i, sample in enumerate(samples):
-        ax = plt.subplot(gs[i])
-        plt.axis('off')
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-        ax.set_aspect('equal')
-        plt.imshow(sample.reshape(iw, ih), cmap='Greys_r')
-
-    return fig
-
-
 
 parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
 workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes - 1 }} format=worker-%d:2222', wantlist=True) }}
