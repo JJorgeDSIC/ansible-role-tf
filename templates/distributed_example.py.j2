@@ -1,23 +1,29 @@
-'''
-Distributed Tensorflow 1.2.0 example of using data parallelism and share model parameters.
-Trains a simple sigmoid neural network on mnist for 20 epochs on three machines using one parameter server. 
-
-Change the hardcoded host urls below with your own hosts. 
-Run like this: 
-
-pc-01$ python3 distributed_example.py --job_name="ps" --task_index=0 
-pc-02$ python3 distributed_example.py --job_name="worker" --task_index=0 
-pc-03$ python3 distributed_example.py --job_name="worker" --task_index=1 
-pc-04$ python3 distributed_example.py --job_name="worker" --task_index=2 
-
-More details here: ischlag.github.io
-'''
-
-from __future__ import print_function
-
 import tensorflow as tf
-import sys
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import numpy as np
+import os
 import time
+import sys
+
+from tensorflow.examples.tutorials.mnist import input_data
+
+def plot(samples, w, h, fw, fh, iw=28, ih=28):
+    fig = plt.figure(figsize=(fw, fh))
+    gs = gridspec.GridSpec(w, h)
+    gs.update(wspace=0.05, hspace=0.05)
+
+    for i, sample in enumerate(samples):
+        ax = plt.subplot(gs[i])
+        plt.axis('off')
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_aspect('equal')
+        plt.imshow(sample.reshape(iw, ih), cmap='Greys_r')
+
+    return fig
+
+
 
 parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
 workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes - 1 }} format=worker-%d:2222', wantlist=True) }}
@@ -32,160 +38,163 @@ job_name = "ps"
 
 cluster = tf.train.ClusterSpec({"ps":parameter_servers, "worker":workers})
 
-# input flags
-#tf.app.flags.DEFINE_string("job_name", "", "Either 'ps' or 'worker'")
-#tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
-FLAGS = tf.app.flags.FLAGS
+"""
+cluster = tf.train.ClusterSpec({
+        'ps':['localhost:2222'],
+        'worker':['localhost:2223']
+})
 
-# start a server for a specific task
-server = tf.train.Server(
-    cluster,
-    job_name=job_name,
-    task_index=task_index)
 
-# config
-batch_size = 100
-learning_rate = 0.0005
-training_epochs = 20
-logs_path = "/tmp/mnist/1"
+job_name = sys.argv[1]
+task_index = int(sys.argv[2])
+"""
 
-# load mnist data set
-from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
+log_dir = '/logdir'
 
 if job_name == "ps":
-	print("Starting parameter server, task={:}...".format(task_index))
-	server.join()
+
+    server = tf.train.Server(cluster,job_name="ps",task_index=task_index)
+    print("Starting parameter server, task={:}...".format(task_index))
+    server.join()
+
 elif job_name == "worker":
-	print("Starting worker, task={:}...".format(task_index))
-	# Between-graph replication
-	with tf.device(tf.train.replica_device_setter(
-		worker_device="/job:worker/task:%d" % task_index,
-		cluster=cluster)):
 
-		# count the number of updates
-		global_step = tf.get_variable(
-            'global_step',
-            [],
-            initializer = tf.constant_initializer(0),
-			trainable = False)
+    print("Starting worker, task={:}...".format(task_index))
 
-		# input images
-		with tf.name_scope('input'):
-		  # None -> batch size can be any size, 784 -> flattened mnist image
-		  x = tf.placeholder(tf.float32, shape=[None, 784], name="x-input")
-		  # target 10 output classes
-		  y_ = tf.placeholder(tf.float32, shape=[None, 10], name="y-input")
-
-		# model parameters will change during training so we use tf.Variable
-		tf.set_random_seed(1)
-		with tf.name_scope("weights"):
-			W1 = tf.Variable(tf.random_normal([784, 100]))
-			W2 = tf.Variable(tf.random_normal([100, 10]))
-
-		# bias
-		with tf.name_scope("biases"):
-			b1 = tf.Variable(tf.zeros([100]))
-			b2 = tf.Variable(tf.zeros([10]))
-
-		# implement model
-		with tf.name_scope("softmax"):
-			# y is our prediction
-			z2 = tf.add(tf.matmul(x,W1),b1)
-			a2 = tf.nn.sigmoid(z2)
-			z3 = tf.add(tf.matmul(a2,W2),b2)
-			y  = tf.nn.softmax(z3)
-
-		# specify cost function
-		with tf.name_scope('cross_entropy'):
-			# this is our cost
-			cross_entropy = tf.reduce_mean(
-                -tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
-
-		# specify optimizer
-		with tf.name_scope('train'):
-			# optimizer is an "operation" which we can execute in a session
-			grad_op = tf.train.GradientDescentOptimizer(learning_rate)
-			'''
-			rep_op = tf.train.SyncReplicasOptimizer(
-                grad_op,
-			    replicas_to_aggregate=len(workers),
- 				replica_id=task_index, 
- 			    total_num_replicas=len(workers),
- 				use_locking=True)
- 			train_op = rep_op.minimize(cross_entropy, global_step=global_step)
- 			'''
-			train_op = grad_op.minimize(cross_entropy, global_step=global_step)
-			
-		'''
-		init_token_op = rep_op.get_init_tokens_op()
-		chief_queue_runner = rep_op.get_chief_queue_runner()
-		'''
-
-		with tf.name_scope('Accuracy'):
-			# accuracy
-			correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-			accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-
-		# create a summary for our cost and accuracy
-		tf.summary.scalar("cost", cross_entropy)
-		tf.summary.scalar("accuracy", accuracy)
-
-		# merge all summaries into a single "operation" which we can execute in a session 
-		summary_op = tf.summary.merge_all()
-		init_op = tf.global_variables_initializer()
-		print("Variables initialized ...")
-
-	sv = tf.train.Supervisor(is_chief=(task_index == 0),
-														global_step=global_step,
-														init_op=init_op)
-
-	#saver = tf.train.Saver()
-	begin_time = time.time()
-	frequency = 100
-	with sv.prepare_or_wait_for_session(server.target) as sess:
-		'''
-		# is chief
-		if task_index == 0:
-			sv.start_queue_runners(sess, [chief_queue_runner])
-			sess.run(init_token_op)
-		'''
-		# create log writer object (this will log on every machine)
-		writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
-				
-		# perform training cycles
-		start_time = time.time()
-		for epoch in range(training_epochs):
-
-			# number of batches in one epoch
-			batch_count = int(mnist.train.num_examples/batch_size)
-
-			count = 0
-			for i in range(batch_count):
-				batch_x, batch_y = mnist.train.next_batch(batch_size)
-				
-				# perform the operations we defined earlier on batch
-				_, cost, summary, step = sess.run(
-												[train_op, cross_entropy, summary_op, global_step], 
-												feed_dict={x: batch_x, y_: batch_y})
-				writer.add_summary(summary, step)
-
-				count += 1
-				if count % frequency == 0 or i+1 == batch_count:
-					elapsed_time = time.time() - start_time
-					start_time = time.time()
-					print("Step: %d," % (step+1), 
-								" Epoch: %2d," % (epoch+1), 
-								" Batch: %3d of %3d," % (i+1, batch_count), 
-								" Cost: %.4f," % cost, 
-								" AvgTime: %3.2fms" % float(elapsed_time*1000/frequency))
-					count = 0
+    is_chief = (task_index == 0)
+    #with tf.device(tf.train.replica_device_setter(worker_device="/job:worker/task:%d" % task_index, cluster=cluster)):
+    server = tf.train.Server(cluster,job_name="worker",task_index=task_index)
 
 
-		print("Test-Accuracy: %2.2f" % sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
-		print("Total Time: %3.2fs" % float(time.time() - begin_time))
-		print("Final Cost: %.4f" % cost)
+    DATA_PATH = "../DATASETS/"
+    mnist = input_data.read_data_sets(DATA_PATH + "MNIST_TF/", one_hot=True)
 
-	sv.stop()
-	print("done")
 
+    X_TOTAL = mnist.train.images.shape[0]
+    X_DIM = mnist.train.images.shape[1]
+    Y_DIM = mnist.train.labels.shape[1]
+    print("# samples {}".format(X_TOTAL))
+    print("Input's dimension {}".format(X_DIM))
+    print("Label's dimension {}".format(Y_DIM))
+
+    with tf.device('/job:worker/task:%d'%task_index):
+
+        #Determining data's input (Setting to None first dimension allows us to use a variable batch size)
+        images_placeholder = tf.placeholder(tf.float32, shape=(None, X_DIM))
+        labels_placeholder = tf.placeholder(tf.int32, shape=(None, Y_DIM))
+        learning_rate_placeholder = tf.placeholder(tf.float32)
+        is_training_placeholder = tf.placeholder(tf.bool)
+
+        #Defining a model
+        def model_dropout(images, is_training=True):
+            
+            h1 = tf.layers.dense(inputs=images, units=1024, activation=tf.nn.relu)
+            h1_dropout = tf.layers.dropout(inputs=h1, rate=0.5, training=is_training)
+
+            h2 = tf.layers.dense(inputs=h1_dropout, units=1024, activation=tf.nn.relu)
+            h2_dropout = tf.layers.dropout(inputs=h2, rate=0.5, training=is_training)
+
+            h3 = tf.layers.dense(inputs=h2_dropout, units=1024, activation=tf.nn.relu)
+            h3_dropout = tf.layers.dropout(inputs=h3, rate=0.5, training=is_training)
+
+            logits = tf.layers.dense(inputs=h3_dropout, units=10, activation=None)
+
+            return logits
+
+
+        output_logits=model_dropout(images_placeholder, is_training_placeholder)
+
+        cross_entropy = tf.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits(labels=labels_placeholder, logits=output_logits))
+
+        train_step = tf.train.GradientDescentOptimizer(learning_rate_placeholder).minimize(cross_entropy)
+
+        #Obtaining accuracy
+        y_pred = tf.argmax(input=output_logits, axis=1)
+        y_true = tf.argmax(input=labels_placeholder, axis=1)
+
+        correct_prediction = tf.equal(y_pred, y_true)
+
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+        # Parameters
+        LEARNING_RATE = 0.5
+        BATCH_SIZE = 64
+        EPOCHS = 10
+        TOTAL_BATCHES = int(X_TOTAL/BATCH_SIZE)
+
+        X_TOTAL_VALID = mnist.validation.images.shape[0]
+        BATCH_SIZE_VAL = 100
+        TOTAL_BATCHES_VALIDATION = int(X_TOTAL_VALID/BATCH_SIZE_VAL)
+
+        # Initializing the variables
+        #init = tf.global_variables_initializer()
+
+        #A Session with a "with" block. The Session closes automatically at the end of the with block.
+        
+        training_acc = []
+        validation_acc = []
+
+    # Session
+    # Supervisor
+    sv = tf.train.Supervisor(logdir=os.getcwd()+log_dir,is_chief=is_chief,save_model_secs=30)
+    sess = sv.prepare_or_wait_for_session(server.target)
+
+    
+    for epoch in range(EPOCHS):
+
+        if sv.should_stop(): 
+            break    
+        
+        batch_indexes = np.random.permutation(TOTAL_BATCHES)
+        
+        training_total_acc = 0
+        start_time = time.time()
+        
+        for minibatch_number, batch_index in enumerate(batch_indexes):
+            
+            
+            
+            X_minibatch = mnist.train.images[batch_index*BATCH_SIZE:(batch_index+1)*BATCH_SIZE]
+            Y_minibatch = mnist.train.labels[batch_index*BATCH_SIZE:(batch_index+1)*BATCH_SIZE]
+
+            _, minibatch_acc = sess.run([train_step, accuracy], 
+                              feed_dict={
+                                  images_placeholder: X_minibatch,
+                                  labels_placeholder: Y_minibatch,
+                                  learning_rate_placeholder: LEARNING_RATE,
+                                  is_training_placeholder: True
+                              })
+            
+            training_total_acc+=minibatch_acc
+            
+            if minibatch_number % 500 == 0:
+                print("MB INDEX {}".format(minibatch_number))
+        
+        print("E {} | TRAINING ACC: {:.4f} | TIME {:.2f} secs".format(epoch, training_total_acc/TOTAL_BATCHES, time.time() - start_time))
+        
+        training_acc.append(training_total_acc/TOTAL_BATCHES)
+        
+        total_minibatch_acc_val = 0
+        
+        start_time_val = time.time()
+        
+        for minibatch_number_validation in range(TOTAL_BATCHES_VALIDATION):
+            
+            X_minibatch = mnist.validation.images[minibatch_number_validation*BATCH_SIZE_VAL:(minibatch_number_validation+1)*BATCH_SIZE_VAL]
+            Y_minibatch = mnist.validation.labels[minibatch_number_validation*BATCH_SIZE_VAL:(minibatch_number_validation+1)*BATCH_SIZE_VAL]
+
+            minibatch_acc_val = sess.run(accuracy, 
+                              feed_dict={
+                                  images_placeholder: X_minibatch,
+                                  labels_placeholder: Y_minibatch,
+                                  is_training_placeholder: False
+                              })
+            
+            total_minibatch_acc_val+=minibatch_acc_val
+
+        print("E {} | VALIDATION ACC: {:.4f} | TIME {:.2f} secs".format(epoch, total_minibatch_acc_val/TOTAL_BATCHES_VALIDATION, time.time() - start_time_val))
+        
+        validation_acc.append(total_minibatch_acc_val/TOTAL_BATCHES_VALIDATION)
+
+    print("Optimization Finished!")
