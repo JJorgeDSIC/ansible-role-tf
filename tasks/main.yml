@@ -29,11 +29,3 @@
    executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
-- name: Execute Script
-  command: python3 distributed_example.py > results.txt
-  args:
-    chdir: /home/ubuntu/
-- name: Display results in Tensorboard (visible at ip\:2222)
-  command: tensorboard --logdir=/tmp/mnist/1 --port 2222
-  args:
-    chdir: /home/ubuntu/
