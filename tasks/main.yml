@@ -19,7 +19,7 @@
 - name: Install tensorflow 1.5
   pip: 
    name: tensorflow 
-   extra_args: --no-cache-dir
+   extra_args: --ignore-installed six
    executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
