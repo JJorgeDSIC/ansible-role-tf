@@ -16,10 +16,10 @@
    name: jupyter 
    state: latest
    executable: pip3
-- name: Install tensorflow 1.4
+- name: Install tensorflow 1.5
   pip: 
    name: tensorflow 
-   version: 1.4
+   version: 1.5
    extra_args: --no-cache-dir
    executable: pip3 
 - name: Install tensorboard
