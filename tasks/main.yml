@@ -20,7 +20,7 @@
   pip: 
    name: tensorflow 
    version: 1.4
-   extra_args: --user
+   extra_args: --no-cache-dir
    executable: pip3 
 - name: Install tensorboard
   pip: 
