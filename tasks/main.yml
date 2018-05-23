@@ -20,7 +20,7 @@
 - name: Install tensorflow
   pip: 
    name: tensorflow 
-   extra_args: --ignore-installed six
+   extra_args: --ignore-installed six --no-cache-dir
   sudo: yes
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
