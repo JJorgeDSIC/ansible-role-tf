@@ -33,7 +33,7 @@ def create_done_queues():
 
 def main(_):
 
-  ps_hosts = {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d-priv:2222', wantlist=True) }}
+  ps_hosts = {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
   worker_hosts = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes - 1 }} format=worker-%d:2222', wantlist=True) }}
 
   # Create a cluster from the parameter server and worker hosts.
