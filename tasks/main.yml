@@ -1,25 +1,24 @@
+- name: Upgrade all packages to the latest version
+  apt:
+    name: "*"
+    state: latest
+- name: Update all packages to the latest version
+  apt:
+    upgrade: dist
+- name: Run the equivalent of "apt-get update" as a separate step
+  apt:
+    update_cache: yes    
 - name: Install Python3-dev tools
   apt: pkg=python3-dev state=latest update_cache=yes
 - name: Install pip
   apt: pkg=python3-pip state=latest update_cache=yes
-- name: Install Git
-  apt: pkg=git state=latest update_cache=yes
-- name: export language things and reconfigure locales
-  shell: export LC_ALL="en_US.UTF-8";export LC_CTYPE="en_US.UTF-8";sudo dpkg-reconfigure locales
 - name: Upgrade pip
   pip: 
    name: pip 
    state: latest
    executable: pip3
-- name: Install Jupyter
-  pip: 
-   name: jupyter 
-   state: latest
-   executable: pip3
-- name: Install tensorflow 1.5
+- name: Install tensorflow
   pip: 
    name: tensorflow 
-   extra_args: --ignore-installed six
-   executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
