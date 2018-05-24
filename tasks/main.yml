@@ -4,7 +4,7 @@
     upgrade: yes
     update_cache: yes
 - name: Install list of basic packages
-  action: apt pkg={{item}} state=installed
+  apt: name={{item}} state=installed
   with_items:
     -build-essential
     -libhdf5-dev
@@ -24,7 +24,7 @@
     -swig
     -libcurl3-dev 
 - name: Install list of python packages
-  action: apt pkg={{item}} state=installed
+  apt: name={{item}} state=installed
   with_items:
     -virtualenvwrapper
     -python-dev
