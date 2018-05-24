@@ -46,9 +46,15 @@
     - python3-pip
     - python3-setuptools
     - python3-wheel
+- name: Install Jupyter Notebook
+  pip: 
+   name: jupyter 
+   executable: pip3 
 - name: Install tensorflow
   pip: 
    name: tensorflow 
    executable: pip3 
 - name: Copying template
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
+- name: Copying advanced template
+  template: src=distributed_example_adv.py.j2 dest=/home/ubuntu/distributed_example_adv.py
