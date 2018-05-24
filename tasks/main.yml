@@ -5,7 +5,7 @@
     update_cache: yes
 - name: Install basic packages
   apt: 
-    name: "{{item}}"
+    name: "{{ item }}"
     update_cache: true
     state: present
   with_items:
@@ -28,7 +28,7 @@
     - libcurl3-dev 
 - name: Install list of python packages
   apt: 
-    name: "{{item}}"
+    name: "{{ item }}"
     update_cache: true
     state: present
   with_items:
