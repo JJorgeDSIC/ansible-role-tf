@@ -26,6 +26,7 @@
     - htop
     - swig
     - libcurl3-dev 
+    - nmap
 - name: Install list of python packages
   apt: 
     name: "{{ item }}"
