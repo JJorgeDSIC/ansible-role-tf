@@ -51,6 +51,10 @@
   pip: 
    name: jupyter 
    executable: pip3 
+- name: Install Matplotlib
+  pip: 
+   name: matplotlib 
+   executable: pip3 
 - name: Install tensorflow
   pip: 
    name: tensorflow 

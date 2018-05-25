@@ -1,16 +1,7 @@
-'''
-Distributed Tensorflow 1.2.0 example of using data parallelism and share model parameters.
-Trains a simple sigmoid neural network on mnist for 20 epochs on three machines using one parameter server. 
-
-More details here: ischlag.github.io
-'''
-
-from __future__ import print_function
-
 import tensorflow as tf
+import numpy as np
 import sys
 import time
-
 
 
 parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
@@ -52,10 +43,6 @@ learning_rate = 0.0005
 training_epochs = 20
 logs_path = "/tmp/mnist/1"
 
-# load mnist data set
-from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-
 if job_name == "ps":
     print("Starting parameter server, task={:}...".format(task_index))
     server.join()
@@ -66,7 +53,11 @@ elif job_name == "worker":
         worker_device="/job:worker/task:%d" % task_index,
         cluster=cluster)):
 
-        filename_queue = tf.train.string_input_producer([DATA_PATH + "MNIST_LITE/mnist_train_lite.csv"])
+        ############
+        # Train Set
+        ############
+
+        filename_queue = tf.train.string_input_producer([ "hdfs://ps-0:9000/mnist/mnist_train_lite.csv"])
 
         reader = tf.TextLineReader()
         key, value = reader.read(filename_queue)
@@ -95,7 +86,46 @@ elif job_name == "worker":
                     capacity=min_queue_examples + 3 * BATCH_SIZE,
                     min_after_dequeue=min_queue_examples)
 
-        # count the number of updates
+        image_batch = tf.placeholder_with_default(images, shape=(None, 784))
+
+        label_batch = tf.placeholder_with_default(labels, shape=(None,))
+
+        label_one_hot_batch = tf.one_hot(label_batch, depth=10)
+
+        #####
+        # Test set
+        #####
+
+        filename_queue_test = tf.train.string_input_producer(["hdfs://ps-0:9000/mnist/mnist_train_lite.csv"])
+
+        reader_test = tf.TextLineReader()
+        key_test, value_test = reader_test.read(filename_queue_test)
+
+        sample_test = tf.decode_csv(value_test, name="reader", record_defaults=record_defaults, field_delim=" ")
+
+        single_image_test, single_label_test = tf.cast(sample_test[:-1], tf.float32), tf.cast(sample_test[-1], tf.int32)
+
+        NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 25
+
+        NUM_PREPROCESS_THREADS = 2
+
+        min_fraction_of_examples_in_queue = 0.4
+        min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN * min_fraction_of_examples_in_queue)
+
+        min_queue_examples = 25
+
+        BATCH_SIZE_TEST = 25
+
+        images_test, labels_test = tf.train.shuffle_batch(
+                    [single_image_test, single_label_test],
+                    batch_size=BATCH_SIZE_TEST,
+                    num_threads=NUM_PREPROCESS_THREADS,
+                    capacity=min_queue_examples + 3 * BATCH_SIZE_TEST,
+                    min_after_dequeue=min_queue_examples)
+
+        label_one_hot_batch_test = tf.one_hot(labels_test, depth=10)
+        
+         # count the number of updates
         global_step = tf.get_variable(
             'global_step',
             [],
@@ -105,9 +135,13 @@ elif job_name == "worker":
         # input images
         with tf.name_scope('input'):
           # None -> batch size can be any size, 784 -> flattened mnist image
-          x = tf.placeholder(tf.float32, shape=[None, 784], name="x-input")
+          #x = tf.placeholder(tf.float32, shape=[None, 784], name="x-input")
+          x = image_batch
           # target 10 output classes
-          y_ = tf.placeholder(tf.float32, shape=[None, 10], name="y-input")
+          #y_ = tf.placeholder(tf.float32, shape=[None, 10], name="y-input")
+          y_ = label_one_hot_batch
+
+
 
         # model parameters will change during training so we use tf.Variable
         tf.set_random_seed(1)
@@ -184,40 +218,48 @@ elif job_name == "worker":
         '''
         # create log writer object (this will log on every machine)
         writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
+        
+        
+        # Start populating the filename queue.
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
                 
         # perform training cycles
         start_time = time.time()
         for epoch in range(training_epochs):
 
-            # number of batches in one epoch
-            batch_count = int(mnist.train.num_examples/batch_size)
-
             count = 0
-            for i in range(batch_count):
-                batch_x, batch_y = mnist.train.next_batch(batch_size)
-                
+
+            for i in range(100):
+                batch_x, batch_y = image_batch, label_one_hot_batch
+
                 # perform the operations we defined earlier on batch
                 _, cost, summary, step = sess.run(
-                                                [train_op, cross_entropy, summary_op, global_step], 
-                                                feed_dict={x: batch_x, y_: batch_y})
+                                                [train_op, cross_entropy, summary_op, global_step])
                 writer.add_summary(summary, step)
 
                 count += 1
-                if count % frequency == 0 or i+1 == batch_count:
+                if count % frequency == 0:
                     elapsed_time = time.time() - start_time
                     start_time = time.time()
                     print("Step: %d," % (step+1), 
                                 " Epoch: %2d," % (epoch+1), 
-                                " Batch: %3d of %3d," % (i+1, batch_count), 
+                                " Batch: %3d of %3d," % (i+1, count), 
                                 " Cost: %.4f," % cost, 
                                 " AvgTime: %3.2fms" % float(elapsed_time*1000/frequency))
                     count = 0
 
 
-        print("Test-Accuracy: %2.2f" % sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
-        print("Total Time: %3.2fs" % float(time.time() - begin_time))
-        print("Final Cost: %.4f" % cost)
+        #print("Test-Accuracy: %2.2f" % sess.run(accuracy, feed_dict={x: image_batch, y_: label_one_hot_batch}))
+        #print("Total Time: %3.2fs" % float(time.time() - begin_time))
+        #print("Final Cost: %.4f" % cost)
+        
+        
+                
+        coord.request_stop()
+        coord.join(threads)
 
-    sv.stop()
-    print("done")
+
+        sv.stop()
+        print("done")
 
