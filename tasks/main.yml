@@ -59,3 +59,8 @@
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
 - name: Copying advanced template
   template: src=distributed_example_adv.py.j2 dest=/home/ubuntu/distributed_example_adv.py
+- name: Install Jupyter Notebook
+  git: 
+    repo: 'https://foosball.example.org/path/to/repo.git'
+    dest: /home/ubuntu/TensorFlowExamples
+    clone: yes
