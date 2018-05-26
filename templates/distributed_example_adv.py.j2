@@ -41,7 +41,7 @@ server = tf.train.Server(
 batch_size = 100
 learning_rate = 0.0005
 training_epochs = 20
-logs_path = "/tmp/mnist/1"
+logs_path = "/home/ubuntu/logs_summary/"
 
 if job_name == "ps":
     print("Starting parameter server, task={:}...".format(task_index))
@@ -202,7 +202,7 @@ elif job_name == "worker":
         init_op = tf.global_variables_initializer()
         print("Variables initialized ...")
 
-    sv = tf.train.Supervisor(is_chief=(task_index == 0),
+    sv = tf.train.Supervisor(is_chief=(task_index == 0), logdir='/home/ubuntu/logs/'
                                                         global_step=global_step,
                                                         init_op=init_op)
 
