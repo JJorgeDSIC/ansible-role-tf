@@ -202,9 +202,7 @@ elif job_name == "worker":
         init_op = tf.global_variables_initializer()
         print("Variables initialized ...")
 
-    sv = tf.train.Supervisor(is_chief=(task_index == 0), logdir='/home/ubuntu/logs/'
-                                                        global_step=global_step,
-                                                        init_op=init_op)
+    sv = tf.train.Supervisor(is_chief=(task_index == 0), logdir='/home/ubuntu/logs/', global_step=global_step, init_op=init_op)
 
     #saver = tf.train.Saver()
     begin_time = time.time()
