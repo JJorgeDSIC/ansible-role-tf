@@ -3,15 +3,15 @@ import numpy as np
 import sys
 import time
 
-def create_done_queue(i):
+def create_done_queue(i,n_workers):
     """Queue used to signal death for i'th ps shard. Intended to have 
     all workers enqueue an item onto it to signal doneness."""
 
     with tf.device("/job:ps/task:%d" % (i)):
-        return tf.FIFOQueue(FLAGS.workers, tf.int32, shared_name="done_queue"+str(i))
+        return tf.FIFOQueue(n_workers, tf.int32, shared_name="done_queue"+str(i))
 
-def create_done_queues():
-    return [create_done_queue(i) for i in range(FLAGS.ps)]
+def create_done_queues(n_ps):
+    return [create_done_queue(i) for i in range(n_ps)]
 
 
 
@@ -59,7 +59,7 @@ if job_name == "ps":
 
     print("Starting parameter server, task={:}...".format(task_index))
     sess = tf.Session(server.target)
-    queue = create_done_queue(task_index)
+    queue = create_done_queue(task_index, len(workers))
 
     # wait until all workers are done
     for i in range(len(workers)):
@@ -226,7 +226,7 @@ elif job_name == "worker":
 
 
         enq_ops = []
-        for q in create_done_queues():
+        for q in create_done_queues(len(parameter_servers)):
             qop = q.enqueue(1)
             enq_ops.append(qop)
 
