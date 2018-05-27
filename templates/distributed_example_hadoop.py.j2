@@ -3,17 +3,6 @@ import numpy as np
 import sys
 import time
 
-def create_done_queue(i,n_workers):
-    """Queue used to signal death for i'th ps shard. Intended to have 
-    all workers enqueue an item onto it to signal doneness."""
-
-    with tf.device("/job:ps/task:%d" % (i)):
-        return tf.FIFOQueue(n_workers, tf.int32, shared_name="done_queue"+str(i))
-
-def create_done_queues(n_ps, n_workers):
-    return [create_done_queue(i, n_workers) for i in range(n_ps)]
-
-
 
 parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
 workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes - 1 }} format=worker-%d:2222', wantlist=True) }}
@@ -47,27 +36,16 @@ server = tf.train.Server(
     job_name=job_name,
     task_index=task_index)
 
-out = open("./text_log.txt", "w")
 
 # config
 batch_size = 100
-learning_rate = 0.1
-training_epochs = 5
+learning_rate = 0.0005
+training_epochs = 20
 logs_path = "/home/ubuntu/logs_summary/"
 
 if job_name == "ps":
-
     print("Starting parameter server, task={:}...".format(task_index))
-    sess = tf.Session(server.target)
-    queue = create_done_queue(task_index, len(workers))
-
-    # wait until all workers are done
-    for i in range(len(workers)):
-        sess.run(queue.dequeue())
-        print("ps %d received done %d" % (task_index, i))
-
-    print("ps %d: quitting"%(task_index))
-    #server.join()
+    server.join()
 elif job_name == "worker":
     print("Starting worker, task={:}...".format(task_index))
     # Between-graph replication
@@ -136,7 +114,7 @@ elif job_name == "worker":
 
         min_queue_examples = 25
 
-        BATCH_SIZE_TEST = 100
+        BATCH_SIZE_TEST = 25
 
         images_test, labels_test = tf.train.shuffle_batch(
                     [single_image_test, single_label_test],
@@ -219,20 +197,12 @@ elif job_name == "worker":
         tf.summary.scalar("cost", cross_entropy)
         tf.summary.scalar("accuracy", accuracy)
 
-        saver = tf.train.Saver()
         # merge all summaries into a single "operation" which we can execute in a session 
         summary_op = tf.summary.merge_all()
         init_op = tf.global_variables_initializer()
-
-
-        enq_ops = []
-        for q in create_done_queues(len(parameter_servers), len(workers)):
-            qop = q.enqueue(1)
-            enq_ops.append(qop)
-
         print("Variables initialized ...")
 
-    sv = tf.train.Supervisor(is_chief=(task_index == 0), logdir='/home/ubuntu/logs/', global_step=global_step, init_op=init_op, summary_op=summary_op, saver=saver, save_model_secs=60)
+    sv = tf.train.Supervisor(is_chief=(task_index == 0), logdir='/home/ubuntu/logs/', global_step=global_step, init_op=init_op)
 
     #saver = tf.train.Saver()
     begin_time = time.time()
@@ -258,7 +228,7 @@ elif job_name == "worker":
 
             count = 0
 
-            for i in range(500):
+            for i in range(100):
                 batch_x, batch_y = image_batch, label_one_hot_batch
 
                 # perform the operations we defined earlier on batch
@@ -275,19 +245,18 @@ elif job_name == "worker":
                                 " Batch: %3d of %3d," % (i+1, count), 
                                 " Cost: %.4f," % cost, 
                                 " AvgTime: %3.2fms" % float(elapsed_time*1000/frequency))
-                    out.write("Step: %d, Epoch: %2d, Batch: %3d of %3d, Cost: %.4f,AvgTime: %3.2fms\n" % (step+1, epoch+1, i+1, count, cost, float(elapsed_time*1000/frequency)))
-
-
                     count = 0
 
+
+        #print("Test-Accuracy: %2.2f" % sess.run(accuracy, feed_dict={x: image_batch, y_: label_one_hot_batch}))
+        #print("Total Time: %3.2fs" % float(time.time() - begin_time))
+        #print("Final Cost: %.4f" % cost)
         
-        for op in enq_ops:
-            sess.run(op)
+        
                 
         coord.request_stop()
         coord.join(threads)
-        print("Total Time: %3.2fs" % float(time.time() - begin_time))
-        out.write("Total Time: %3.2fs\n" % float(time.time() - begin_time))
-        out.close()
+
+
         sv.stop()
         print("done")
