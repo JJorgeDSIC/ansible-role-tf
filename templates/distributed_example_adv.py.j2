@@ -57,7 +57,7 @@ elif job_name == "worker":
         # Train Set
         ############
 
-        filename_queue = tf.train.string_input_producer([ "hdfs://ps-0:9000/mnist/mnist_train_lite.csv"])
+        filename_queue = tf.train.string_input_producer([ "hdfs://ps-0:9000/mnist/part" + str(task_index)])
 
         reader = tf.TextLineReader()
         key, value = reader.read(filename_queue)
@@ -96,7 +96,7 @@ elif job_name == "worker":
         # Test set
         #####
 
-        filename_queue_test = tf.train.string_input_producer(["hdfs://ps-0:9000/mnist/mnist_train_lite.csv"])
+        filename_queue_test = tf.train.string_input_producer(["hdfs://ps-0:9000/mnist/test_part" + str(task_index)])
 
         reader_test = tf.TextLineReader()
         key_test, value_test = reader_test.read(filename_queue_test)
