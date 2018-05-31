@@ -329,7 +329,6 @@ elif job_name == "worker":
         for epoch in range(training_epochs):
 
             count = 0
-
             for i in range(500):
                 batch_x, batch_y = image_batch, label_one_hot_batch
 
@@ -358,8 +357,34 @@ elif job_name == "worker":
                 
         coord.request_stop()
         coord.join(threads)
+
         print("Total Time: %3.2fs" % float(time.time() - begin_time))
         out.write("Total Time: %3.2fs\n" % float(time.time() - begin_time))
         out.close()
         sv.stop()
+
+        if is_chief:
+            s3 = boto3.resource('s3',aws_access_key_id="{{ access_key_id }}",aws_secret_access_key="{{ secret_access_key_id }}")
+
+            for i in glob.glob('./logs/*'):
+                data = open(i,'rb')
+                name = i.split("/")[-1]
+                print("uploading " + str(i) + " to " + name)
+                s3.Bucket('alucloud143').put_object(Key="model/" + name, Body=data)
+            log_out = open("./text_log.txt", "rb")
+            s3.Bucket('alucloud143').put_object(Key="model/logs.txt", Body=log_out)
+
+
+
+        if is_chief:
+          
+          s3 = boto3.resource('s3',aws_access_key_id="{{ access_key_id }}",aws_secret_access_key="{{ secret_access_key_id }}")
+
+          for i in glob.glob('./logs/*'):
+            data = open(i,'rb') 
+            name = i.split("/")[-1]
+            print("uploading " + str(i) + " to " + name)
+            s3.Bucket('alucloud143').put_object(Key="model/" + name, Body=data)
+
+            
         print("done")
