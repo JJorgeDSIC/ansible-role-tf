@@ -67,6 +67,8 @@
   template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
 - name: Copying advanced template
   template: src=distributed_example_adv.py.j2 dest=/home/ubuntu/distributed_example_adv.py
+- name: Copying advanced template with s3Select
+  template: src=distributed_example_s3select.py.j2 dest=/home/ubuntu/distributed_example_s3select.py
 - name: Copying script
   template: src=run.sh dest=/home/ubuntu/run.sh
 - name: Cloning repository with TF examples
