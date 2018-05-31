@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 import sys
 import time
+import glob
+import boto3
 
 def create_done_queue(i,n_workers):
     """Queue used to signal death for i'th ps shard. Intended to have 
@@ -14,7 +16,6 @@ def create_done_queues(n_ps, n_workers):
     return [create_done_queue(i, n_workers) for i in range(n_ps)]
 
 
-import boto3
 s3 = boto3.client('s3',
 	aws_access_key_id="{{ access_key_id }}",
     aws_secret_access_key="{{ secret_access_key_id }}")
@@ -24,7 +25,7 @@ response = s3.select_object_content(
     Bucket='alucloud143', 
     Key='mnist_train_lite.csv', 
     ExpressionType='SQL', 
-    Expression="select * from s3object s limit 5", 
+    Expression="select * from s3object s", 
     InputSerialization = {'CSV': {"FileHeaderInfo": "Use"}}, 
     OutputSerialization = {'CSV': {}},)
 
@@ -32,7 +33,7 @@ response_test = s3.select_object_content(
     Bucket='alucloud143', 
     Key='mnist_test_lite.csv', 
     ExpressionType='SQL', 
-    Expression="select * from s3object s limit 5", 
+    Expression="select * from s3object s", 
     InputSerialization = {'CSV': {"FileHeaderInfo": "Use"}}, 
     OutputSerialization = {'CSV': {}},)
 
