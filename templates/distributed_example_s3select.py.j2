@@ -1,0 +1,332 @@
+import tensorflow as tf
+import numpy as np
+import sys
+import time
+
+def create_done_queue(i,n_workers):
+    """Queue used to signal death for i'th ps shard. Intended to have 
+    all workers enqueue an item onto it to signal doneness."""
+
+    with tf.device("/job:ps/task:%d" % (i)):
+        return tf.FIFOQueue(n_workers, tf.int32, shared_name="done_queue"+str(i))
+
+def create_done_queues(n_ps, n_workers):
+    return [create_done_queue(i, n_workers) for i in range(n_ps)]
+
+
+import boto3
+s3 = boto3.client('s3',
+	aws_access_key_id="{{ access_key_id }}",
+    aws_secret_access_key="{{ secret_access_key_id }}")
+
+
+response = s3.select_object_content(
+    Bucket='alucloud143', 
+    Key='mnist_train_lite.csv', 
+    ExpressionType='SQL', 
+    Expression="select * from s3object s limit 5", 
+    InputSerialization = {'CSV': {"FileHeaderInfo": "Use"}}, 
+    OutputSerialization = {'CSV': {}},)
+
+
+parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
+workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes - 1 }} format=worker-%d:2222', wantlist=True) }}
+
+{% if ansible_hostname.startswith("worker") %}
+task_index = {{ ansible_hostname[-1] | int}} - {{ ps_nodes }}
+job_name = "worker"
+{% else %}
+task_index = {{ ansible_hostname[-1] | int}}
+job_name = "ps"
+{% endif %}
+
+"""
+parameter_servers =  ['localhost:2222']
+workers = ['localhost:2223']
+
+job_name = sys.argv[1]
+task_index = int(sys.argv[2])
+"""
+
+dataset_filename = './mnist_part' + str(task_index) + '.txt'
+
+# This is the event stream in the response
+event_stream = response['Payload']
+end_event_received = False
+with open(dataset_filename, 'wb') as f:
+    # Iterate over events in the event stream as they come
+    for event in event_stream:
+        # If we received a records event, write the data to a file
+        if 'Records' in event:
+            data = event['Records']['Payload']
+            f.write(data)
+        # If we received a progress event, print the details
+        elif 'Progress' in event:
+            print(event['Progress']['Details'])
+        # End event indicates that the request finished successfully
+        elif 'End' in event:
+            print('Result is complete')
+            end_event_received = True
+if not end_event_received:
+    raise Exception("End event not received, request incomplete.")
+
+
+
+
+cluster = tf.train.ClusterSpec({"ps":parameter_servers, "worker":workers})
+
+# input flags
+#tf.app.flags.DEFINE_string("job_name", "", "Either 'ps' or 'worker'")
+#tf.app.flags.DEFINE_integer("task_index", 0, "Index of task within the job")
+FLAGS = tf.app.flags.FLAGS
+
+# start a server for a specific task
+server = tf.train.Server(
+    cluster,
+    job_name=job_name,
+    task_index=task_index)
+
+out = open("./text_log.txt", "w")
+
+# config
+batch_size = 100
+learning_rate = 0.1
+training_epochs = 5
+logs_path = "./logs_summary/"
+
+if job_name == "ps":
+
+    print("Starting parameter server, task={:}...".format(task_index))
+    sess = tf.Session(server.target)
+    queue = create_done_queue(task_index, len(workers))
+
+    # wait until all workers are done
+    for i in range(len(workers)):
+        sess.run(queue.dequeue())
+        print("ps %d received done %d" % (task_index, i))
+
+    print("ps %d: quitting"%(task_index))
+    #server.join()
+elif job_name == "worker":
+    print("Starting worker, task={:}...".format(task_index))
+    # Between-graph replication
+    with tf.device(tf.train.replica_device_setter(
+        worker_device="/job:worker/task:%d" % task_index,
+        cluster=cluster)):
+
+        ############
+        # Train Set
+        ############
+
+        filename_queue = tf.train.string_input_producer([ dataset_filename ])
+
+        reader = tf.TextLineReader()
+        key, value = reader.read(filename_queue)
+
+        record_defaults = [[] for i in range(785)]
+
+        sample = tf.decode_csv(value, name="reader", record_defaults=record_defaults, field_delim=" ")
+
+        single_image, single_label = tf.cast(sample[:-1], tf.float32), tf.cast(sample[-1], tf.int32)
+
+        NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 60000
+
+        NUM_PREPROCESS_THREADS = 2
+
+        min_fraction_of_examples_in_queue = 0.4
+        min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN * min_fraction_of_examples_in_queue)
+
+        min_queue_examples = 100
+
+        BATCH_SIZE = 64
+
+        images, labels = tf.train.shuffle_batch(
+                    [single_image, single_label],
+                    batch_size=BATCH_SIZE,
+                    num_threads=NUM_PREPROCESS_THREADS,
+                    capacity=min_queue_examples + 3 * BATCH_SIZE,
+                    min_after_dequeue=min_queue_examples)
+
+        image_batch = tf.placeholder_with_default(images, shape=(None, 784))
+
+        label_batch = tf.placeholder_with_default(labels, shape=(None,))
+
+        label_one_hot_batch = tf.one_hot(label_batch, depth=10)
+
+        #####
+        # Test set
+        #####
+
+        filename_queue_test = tf.train.string_input_producer(["hdfs://ps-0:9000/mnist/test_part" + str(task_index)])
+
+        reader_test = tf.TextLineReader()
+        key_test, value_test = reader_test.read(filename_queue_test)
+
+        sample_test = tf.decode_csv(value_test, name="reader", record_defaults=record_defaults, field_delim=" ")
+
+        single_image_test, single_label_test = tf.cast(sample_test[:-1], tf.float32), tf.cast(sample_test[-1], tf.int32)
+
+        NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 25
+
+        NUM_PREPROCESS_THREADS = 2
+
+        min_fraction_of_examples_in_queue = 0.4
+        min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN * min_fraction_of_examples_in_queue)
+
+        min_queue_examples = 25
+
+        BATCH_SIZE_TEST = 100
+
+        images_test, labels_test = tf.train.shuffle_batch(
+                    [single_image_test, single_label_test],
+                    batch_size=BATCH_SIZE_TEST,
+                    num_threads=NUM_PREPROCESS_THREADS,
+                    capacity=min_queue_examples + 3 * BATCH_SIZE_TEST,
+                    min_after_dequeue=min_queue_examples)
+
+        label_one_hot_batch_test = tf.one_hot(labels_test, depth=10)
+        
+         # count the number of updates
+        global_step = tf.get_variable(
+            'global_step',
+            [],
+            initializer = tf.constant_initializer(0),
+            trainable = False)
+
+        # input images
+        with tf.name_scope('input'):
+          # None -> batch size can be any size, 784 -> flattened mnist image
+          #x = tf.placeholder(tf.float32, shape=[None, 784], name="x-input")
+          x = image_batch
+          # target 10 output classes
+          #y_ = tf.placeholder(tf.float32, shape=[None, 10], name="y-input")
+          y_ = label_one_hot_batch
+
+
+
+        # model parameters will change during training so we use tf.Variable
+        tf.set_random_seed(1)
+        with tf.name_scope("weights"):
+            W1 = tf.Variable(tf.random_normal([784, 100]))
+            W2 = tf.Variable(tf.random_normal([100, 10]))
+
+        # bias
+        with tf.name_scope("biases"):
+            b1 = tf.Variable(tf.zeros([100]))
+            b2 = tf.Variable(tf.zeros([10]))
+
+        # implement model
+        with tf.name_scope("softmax"):
+            # y is our prediction
+            z2 = tf.add(tf.matmul(x,W1),b1)
+            a2 = tf.nn.sigmoid(z2)
+            z3 = tf.add(tf.matmul(a2,W2),b2)
+            y  = tf.nn.softmax(z3)
+
+        # specify cost function
+        with tf.name_scope('cross_entropy'):
+            # this is our cost
+            cross_entropy = tf.reduce_mean(
+                -tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
+
+        # specify optimizer
+        with tf.name_scope('train'):
+            # optimizer is an "operation" which we can execute in a session
+            grad_op = tf.train.GradientDescentOptimizer(learning_rate)
+            '''
+            rep_op = tf.train.SyncReplicasOptimizer(
+                grad_op,
+                replicas_to_aggregate=len(workers),
+                replica_id=task_index, 
+                total_num_replicas=len(workers),
+                use_locking=True)
+            train_op = rep_op.minimize(cross_entropy, global_step=global_step)
+            '''
+            train_op = grad_op.minimize(cross_entropy, global_step=global_step)
+            
+        '''
+        init_token_op = rep_op.get_init_tokens_op()
+        chief_queue_runner = rep_op.get_chief_queue_runner()
+        '''
+
+        with tf.name_scope('Accuracy'):
+            # accuracy
+            correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+        # create a summary for our cost and accuracy
+        tf.summary.scalar("cost", cross_entropy)
+        tf.summary.scalar("accuracy", accuracy)
+
+        saver = tf.train.Saver()
+        # merge all summaries into a single "operation" which we can execute in a session 
+        summary_op = tf.summary.merge_all()
+        init_op = tf.global_variables_initializer()
+
+
+        enq_ops = []
+        for q in create_done_queues(len(parameter_servers), len(workers)):
+            qop = q.enqueue(1)
+            enq_ops.append(qop)
+
+        print("Variables initialized ...")
+
+    sv = tf.train.Supervisor(is_chief=(task_index == 0), logdir='/home/ubuntu/logs/', global_step=global_step, init_op=init_op, summary_op=summary_op, saver=saver, save_model_secs=60)
+
+    #saver = tf.train.Saver()
+    begin_time = time.time()
+    frequency = 100
+    with sv.prepare_or_wait_for_session(server.target) as sess:
+        '''
+        # is chief
+        if task_index == 0:
+            sv.start_queue_runners(sess, [chief_queue_runner])
+            sess.run(init_token_op)
+        '''
+        # create log writer object (this will log on every machine)
+        writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
+        
+        
+        # Start populating the filename queue.
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+                
+        # perform training cycles
+        start_time = time.time()
+        for epoch in range(training_epochs):
+
+            count = 0
+
+            for i in range(500):
+                batch_x, batch_y = image_batch, label_one_hot_batch
+
+                # perform the operations we defined earlier on batch
+                _, cost, summary, step = sess.run(
+                                                [train_op, cross_entropy, summary_op, global_step])
+                writer.add_summary(summary, step)
+
+                count += 1
+                if count % frequency == 0:
+                    elapsed_time = time.time() - start_time
+                    start_time = time.time()
+                    print("Step: %d," % (step+1), 
+                                " Epoch: %2d," % (epoch+1), 
+                                " Batch: %3d of %3d," % (i+1, count), 
+                                " Cost: %.4f," % cost, 
+                                " AvgTime: %3.2fms" % float(elapsed_time*1000/frequency))
+                    out.write("Step: %d, Epoch: %2d, Batch: %3d of %3d, Cost: %.4f,AvgTime: %3.2fms\n" % (step+1, epoch+1, i+1, count, cost, float(elapsed_time*1000/frequency)))
+
+
+                    count = 0
+
+        
+        for op in enq_ops:
+            sess.run(op)
+                
+        coord.request_stop()
+        coord.join(threads)
+        print("Total Time: %3.2fs" % float(time.time() - begin_time))
+        out.write("Total Time: %3.2fs\n" % float(time.time() - begin_time))
+        out.close()
+        sv.stop()
+        print("done")

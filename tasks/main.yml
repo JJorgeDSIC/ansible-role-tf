@@ -55,6 +55,10 @@
   pip: 
    name: matplotlib 
    executable: pip3 
+- name: Install boto3
+  pip: 
+   name: boto3 
+   executable: pip3 
 - name: Install tensorflow
   pip: 
    name: tensorflow 
