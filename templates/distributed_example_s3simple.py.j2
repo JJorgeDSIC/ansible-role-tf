@@ -326,7 +326,7 @@ elif job_name == "worker":
         #print("Test-Accuracy: %2.2f" % sess.run(accuracy, feed_dict={x: image_batch, y_: label_one_hot_batch}))
         #print("Total Time: %3.2fs" % float(time.time() - begin_time))
         #print("Final Cost: %.4f" % cost)
-        if is_chief:
+        if task_index == 0:
           
           s3 = boto3.resource('s3',aws_access_key_id="{{ access_key_id }}",aws_secret_access_key="{{ secret_access_key_id }}")
 
