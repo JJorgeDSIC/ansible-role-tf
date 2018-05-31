@@ -28,6 +28,14 @@ response = s3.select_object_content(
     InputSerialization = {'CSV': {"FileHeaderInfo": "Use"}}, 
     OutputSerialization = {'CSV': {}},)
 
+response_test = s3.select_object_content(
+    Bucket='alucloud143', 
+    Key='mnist_test_lite.csv', 
+    ExpressionType='SQL', 
+    Expression="select * from s3object s limit 5", 
+    InputSerialization = {'CSV': {"FileHeaderInfo": "Use"}}, 
+    OutputSerialization = {'CSV': {}},)
+
 
 parameter_servers =  {{ lookup('sequence', 'start=0 count={{ ps_nodes }} format=ps-%d:2222', wantlist=True) }}
 workers = {{ lookup('sequence', 'start={{ ps_nodes }} count={{ ps_nodes + worker_nodes - 1 }} format=worker-%d:2222', wantlist=True) }}
@@ -70,6 +78,31 @@ with open(dataset_filename, 'wb') as f:
 if not end_event_received:
     raise Exception("End event not received, request incomplete.")
 
+f.close()
+
+dataset_test_filename = './mnist_test_part' + str(task_index) + '.txt'
+
+# This is the event stream in the response
+event_stream = response_test['Payload']
+end_event_received = False
+with open(dataset_test_filename, 'wb') as f2:
+    # Iterate over events in the event stream as they come
+    for event in event_stream:
+        # If we received a records event, write the data to a file
+        if 'Records' in event:
+            data = event['Records']['Payload']
+            f2.write(data)
+        # If we received a progress event, print the details
+        elif 'Progress' in event:
+            print(event['Progress']['Details'])
+        # End event indicates that the request finished successfully
+        elif 'End' in event:
+            print('Result is complete')
+            end_event_received = True
+if not end_event_received:
+    raise Exception("End event not received, request incomplete.")
+
+f2.close()
 
 
 
