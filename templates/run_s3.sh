@@ -1,4 +1,6 @@
 #/bin/bash
 echo "Hello world!"
 
-python3 distributed_example_s3simple.py
+#Auto conclusive
+python3 distributed_example_s3select.py
+#python3 distributed_example_s3simple.py
