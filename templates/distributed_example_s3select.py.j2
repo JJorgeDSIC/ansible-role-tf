@@ -190,7 +190,7 @@ elif job_name == "worker":
         # Test set
         #####
 
-        filename_queue_test = tf.train.string_input_producer(["hdfs://ps-0:9000/mnist/test_part" + str(task_index)])
+        filename_queue_test = tf.train.string_input_producer([ dataset_test_filename ])
 
         reader_test = tf.TextLineReader()
         key_test, value_test = reader_test.read(filename_queue_test)
