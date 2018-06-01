@@ -188,6 +188,22 @@ elif job_name == "worker":
         print("Total Time: %3.2fs" % float(time.time() - begin_time))
         print("Final Cost: %.4f" % cost)
 
+        #### Uploading the model to S3 #####
+
+        import glob
+        import boto3
+
+        #If im the chief-worker
+        if task_index == 0:
+            s3 = boto3.resource('s3',aws_access_key_id="{{ access_key_id }}",aws_secret_access_key="{{ secret_access_key_id }}")
+
+            for i in glob.glob('./logs/*'):
+                data = open(i,'rb')
+                name = i.split("/")[-1]
+                print("Uploading " + str(i) + " to " + name)
+                s3.Bucket('alucloud143').put_object(Key="model/" + name, Body=data)
+
+
     sv.stop()
     print("done")
 
