@@ -5,16 +5,7 @@ galaxy_info:
   license: MIT
   min_ansible_version: 1.4
   version: 0.4
-  categories:
-    - clustering
-  platforms:
-  - name: EL
-    versions:
-    - 6
   - name: Ubuntu
     versions:
-    - precise
-    - quantal
-    - saucy
+    - xenial
 dependencies: []
-  

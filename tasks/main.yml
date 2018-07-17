@@ -38,8 +38,6 @@
     - python-pip
     - python-setuptools
     - python-numpy
-    - python-dev
-    - python-pip
     - python-virtualenv
     - python-wheel
     - python3-dev
@@ -47,36 +45,20 @@
     - python3-pip
     - python3-setuptools
     - python3-wheel
-- name: Install Jupyter Notebook
+- name: Install Jupyter Notebook,Matplotlib,boto3 and Tensorflow
   pip: 
-   name: jupyter 
+   name: "{{ item }}" 
    executable: pip3 
-- name: Install Matplotlib
-  pip: 
-   name: matplotlib 
-   executable: pip3 
-- name: Install boto3
-  pip: 
-   name: boto3 
-   executable: pip3 
-- name: Install tensorflow
-  pip: 
-   name: tensorflow 
-   executable: pip3 
-- name: Copying template
-  template: src=distributed_example.py.j2 dest=/home/ubuntu/distributed_example.py
-- name: Copying advanced template
-  template: src=distributed_example_adv.py.j2 dest=/home/ubuntu/distributed_example_adv.py
+   with_items:
+    - jupyter
+    - matplotlib
+    - boto3
+    - tensorflow
+- name: Copying Training Script
+  template: src=distributed_example_hdfs.py.j2 dest=/home/ubuntu/distributed_example_hdfs.py
 - name: Copying advanced template with s3Select
   template: src=distributed_example_s3select.py.j2 dest=/home/ubuntu/distributed_example_s3select.py
-- name: Copying advanced template with s3SelectSimple
-  template: src=distributed_example_s3simple.py.j2 dest=/home/ubuntu/distributed_example_s3simple.py
 - name: Copying script
   template: src=run.sh dest=/home/ubuntu/run.sh
 - name: Copying script
   template: src=run_s3.sh dest=/home/ubuntu/run_s3.sh
-- name: Cloning repository with TF examples
-  git: 
-    repo: 'https://github.com/JJorgeDSIC/TensorFlow-With-Examples.git'
-    dest: /home/ubuntu/TensorFlowExamples
-    clone: yes

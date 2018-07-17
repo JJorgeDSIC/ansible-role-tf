@@ -22,7 +22,7 @@ s3 = boto3.client('s3',
 
 
 response = s3.select_object_content(
-    Bucket='alucloud143', 
+    Bucket='{{ bucket_name }}', 
     Key='mnist_train_lite.csv', 
     ExpressionType='SQL', 
     Expression="select * from s3object s", 
@@ -30,7 +30,7 @@ response = s3.select_object_content(
     OutputSerialization = {'CSV': {}},)
 
 response_test = s3.select_object_content(
-    Bucket='alucloud143', 
+    Bucket='{{ bucket_name }}', 
     Key='mnist_test_lite.csv', 
     ExpressionType='SQL', 
     Expression="select * from s3object s", 
@@ -371,9 +371,9 @@ elif job_name == "worker":
                 data = open(i,'rb')
                 name = i.split("/")[-1]
                 print("uploading " + str(i) + " to " + name)
-                s3.Bucket('alucloud143').put_object(Key="model/" + name, Body=data)
+                s3.Bucket('{{ bucket_name }}').put_object(Key="model/" + name, Body=data)
             log_out = open("./text_log.txt", "rb")
-            s3.Bucket('alucloud143').put_object(Key="model/logs.txt", Body=log_out)
+            s3.Bucket('{{ bucket_name }}').put_object(Key="model/logs.txt", Body=log_out)
 
             
         print("done")
