@@ -62,3 +62,8 @@
   template: src=run.sh dest=/home/ubuntu/run.sh
 - name: Copying script
   template: src=run_s3.sh dest=/home/ubuntu/run_s3.sh
+- name: Cloning repository with TF examples (data and sanity check)
+  git: 
+    repo: 'https://github.com/JJorgeDSIC/TensorFlow-With-Examples.git'
+    dest: /home/ubuntu/TensorFlowExamples
+    clone: yes
